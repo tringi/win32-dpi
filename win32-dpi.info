@@ -1,0 +1,56 @@
+[generator]
+	autoincrement	= true
+
+[description]
+	filename		= %targetfilename%
+	filedescription		= Win32 DPI-aware window example
+	internalname		= win32-dpi
+
+	major = 1
+	minor = 0
+	patch = 0
+	build = 62
+
+[versioninfo]
+	filename	= %dir%\%internalname%.rc
+	language	= 0x0409
+	codepage	= 1200
+	manifest	= true
+	dll		= false
+	fileversion	= %major%,%minor%,%patch%,%build%
+	productversion	= %major%,%minor%,%patch%,%build%
+
+[versioninfo:values]
+	FileVersion	= %major%.%minor%.%patch%.%build%
+	FileDescription	= %filedescription%
+	InternalName	= %internalname%
+	OriginalFilename= %filename%
+
+[versioninfo:ff]
+	debug		= %debug%
+	prerelease	= false
+	private		= false
+	special		= false
+
+[manifest]
+	filename	= %dir%\%internalname%.manifest
+	architecture	= %platform%
+
+	assemblyVersion		= %major%.%minor%.%patch%.%build%
+	assemblyIdentityName	= %internalname%
+	assemblyDescription	= %filedescription%
+
+	requestedExecutionLevel	= asInvoker
+	dpiAware	= True/PM
+	dpiAwareness	= PerMonitorV2,PerMonitor
+;	longPathAware	= True
+
+	supportedOS:1	= e2011457-1546-43c5-a5fe-008deee3d3f0 Windows Vista/Server 2008
+	supportedOS:2	= 35138b9a-5d96-4fbd-8e2d-a2440225f93a Windows 7/Server 2008 R2
+	supportedOS:3	= 4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38 Windows 8/Server 2012
+	supportedOS:4	= 1f676c76-80e1-4239-95bb-83d0f6d0da78 Windows 8.1/Server 2012 R2
+	supportedOS:5	= 8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a Windows 10
+
+	dependentAssembly:1	= Microsoft.Windows.Common-Controls 6.0.0.0 6595b64144ccf1df
+
+	maxversiontested = 10.0.18980.1
