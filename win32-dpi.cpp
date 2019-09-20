@@ -188,9 +188,7 @@ private:
                 DeleteObject (this->handle);
             }
         }
-        bool Update (LOGFONT lf, UINT dpi, UINT dpiSystem) {
-            lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem); // adjust against system DPI
-
+        bool update (LOGFONT lf) {
             if (lf.lfHeight > 0) {
                 this->height = lf.lfHeight;
             } else {
@@ -324,22 +322,24 @@ private:
 
         LOGFONT lf;
         if (GetThemeSysFont (hTheme, TMT_MSGBOXFONT, &lf) == S_OK) {
-            this->fonts.text.Update (lf, dpi, dpiSystem);
+            lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+            this->fonts.text.update (lf);
         } else {
             if (GetObject (GetStockObject (DEFAULT_GUI_FONT), sizeof lf, &lf)) {
-                this->fonts.text.Update (lf, dpi, dpiSystem);
+                lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+                this->fonts.text.update (lf);
             }
         }
         if (GetThemeFont (hTheme, NULL, TEXT_MAININSTRUCTION, 0, TMT_FONT, &lf) == S_OK) {
-            if (AreDpiApisScaled (this->hWnd)) {
-                this->fonts.title.Update (lf, dpi, dpi);
-            } else {
-                this->fonts.title.Update (lf, dpi, dpiSystem);
+            if (!AreDpiApisScaled (this->hWnd)) {
+                lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
             }
+            this->fonts.title.update (lf);
         } else {
             // themes off or unavailable, reuse above one and make it bold
             lf.lfWeight = FW_BOLD;
-            this->fonts.title.Update (lf, dpi, dpiSystem);
+            lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+            this->fonts.title.update (lf);
         }
 
         if (hTheme) {
