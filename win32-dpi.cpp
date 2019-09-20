@@ -24,6 +24,7 @@ DPI_AWARENESS_CONTEXT (WINAPI * ptrGetWindowDpiAwarenessContext) (HWND) = NULL;
 HRESULT (WINAPI * ptrLoadIconWithScaleDown) (HINSTANCE, PCWSTR, int, int, HICON *) = NULL;
 
 // Convenient loading function, see WinMain
+//  - simplified version of https://github.com/tringi/emphasize/blob/master/Windows/Windows_Symbol.hpp
 
 template <typename P>
 bool Symbol (HMODULE h, P & pointer, const char * name) {
