@@ -6,6 +6,7 @@
 #include <VersionHelpers.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <new>
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
@@ -100,7 +101,7 @@ private:
     int  metrics [SM_CMETRICS] = { 0 };
     HICON icons [IconSizesCount] = { NULL };
     HCURSOR cursor = NULL;
-
+    
     explicit Window (HWND hWnd)
         : hWnd (hWnd)
         , dpi (GetDPI (hWnd)) {};
@@ -159,6 +160,7 @@ private:
     // RefreshVisualMetrics
     //  - enables us to use 'this->metrics [SM_xxx]' whenever we need some metrics
     //    instead of calling the function at every spot
+    //  - some values are not actually metrics (exercise for the reader)
     //
     LRESULT RefreshVisualMetrics (UINT dpiSystem = GetDPI (NULL)) {
         if (ptrGetSystemMetricsForDpi) {
@@ -186,34 +188,33 @@ private:
                 DeleteObject (this->handle);
             }
         }
-        bool Update (HTHEME hTheme, UINT dpi, UINT dpiSystem, int id) {
-            LOGFONT lf;
-            if (GetThemeSysFont (hTheme, id, &lf) == S_OK) {
+        bool Update (LOGFONT lf, UINT dpi, UINT dpiSystem) {
+            lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem); // adjust against system DPI
 
-                lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem); // adjust against system DPI
-
-                if (lf.lfHeight > 0) {
-                    this->height = lf.lfHeight;
-                } else {
-                    this->height = 96 * -lf.lfHeight / 72;
-                }
-                if (auto hNewFont = CreateFontIndirect (&lf)) {
-                    if (this->handle != NULL) {
-                        DeleteObject (this->handle);
-                    }
-                    this->handle = hNewFont;
-                    return true;
-                } else {
-                    if (this->handle == NULL) {
-                        this->handle = (HFONT) GetStockObject (DEFAULT_GUI_FONT);
-                    }
-                }
+            if (lf.lfHeight > 0) {
+                this->height = lf.lfHeight;
+            } else {
+                this->height = 96 * -lf.lfHeight / 72;
             }
-            return false;
+            if (auto hNewFont = CreateFontIndirect (&lf)) {
+                if (this->handle != NULL) {
+                    DeleteObject (this->handle);
+                }
+                this->handle = hNewFont;
+                return true;
+            } else {
+                if (this->handle == NULL) {
+                    this->handle = (HFONT) GetStockObject (DEFAULT_GUI_FONT);
+                }
+                return false;
+            }
         }
     };
 
-    Font font;
+    struct {
+        Font text;
+        Font title;
+    } fonts;
 
 public:
     static LPCTSTR Initialize (HINSTANCE hInstance) {
@@ -288,7 +289,8 @@ private:
     }
 
     LRESULT OnCreate (const CREATESTRUCT * cs) {
-        CreateWindow (L"STATIC", L"text height test: \x158\xB3 \x338 \x2211 \xBEB\xA675", WS_VISIBLE | WS_CHILD | WS_BORDER | SS_CENTER, 0,0,0,0, hWnd, (HMENU) 101, cs->hInstance, NULL);
+        CreateWindow (L"STATIC", L"", WS_VISIBLE | WS_CHILD | SS_LEFT, 0,0,0,0, hWnd, (HMENU) 100, cs->hInstance, NULL);
+        CreateWindow (L"STATIC", L"", WS_VISIBLE | WS_CHILD | WS_BORDER | SS_CENTER, 0,0,0,0, hWnd, (HMENU) 101, cs->hInstance, NULL);
         CreateWindow (L"BUTTON", L"BUTTON", WS_VISIBLE | WS_CHILD | WS_TABSTOP, 0,0,0,0, hWnd, (HMENU) IDOK, cs->hInstance, NULL);
         this->OnVisualEnvironmentChange ();
         return 0;
@@ -320,16 +322,44 @@ private:
         //  - note that hTheme can be NULL when XP,Vista,7 is in classic mode
         //    or when compatibility mode is imposed onto the window
 
-        this->font.Update (hTheme, dpi, dpiSystem, TMT_MSGBOXFONT);
+        LOGFONT lf;
+        if (GetThemeSysFont (hTheme, TMT_MSGBOXFONT, &lf) == S_OK) {
+            this->fonts.text.Update (lf, dpi, dpiSystem);
+        } else {
+            if (GetObject (GetStockObject (DEFAULT_GUI_FONT), sizeof lf, &lf)) {
+                this->fonts.text.Update (lf, dpi, dpiSystem);
+            }
+        }
+        if (GetThemeFont (hTheme, NULL, TEXT_MAININSTRUCTION, 0, TMT_FONT, &lf) == S_OK) {
+            if (AreDpiApisScaled (this->hWnd)) {
+                this->fonts.title.Update (lf, dpi, dpi);
+            } else {
+                this->fonts.title.Update (lf, dpi, dpiSystem);
+            }
+        } else {
+            // themes off or unavailable, reuse above one and make it bold
+            lf.lfWeight = FW_BOLD;
+            this->fonts.title.Update (lf, dpi, dpiSystem);
+        }
 
         if (hTheme) {
             CloseThemeData (hTheme);
         }
 
+        // display text size
+
+        wchar_t text [64];
+        swprintf (text, L"%ld px TITLE:", this->fonts.title.height);
+        SetDlgItemText (hWnd, 100, text);
+
+        swprintf (text, L"%ld px text characters test: \x158\xB3 \x338 \x2211 \xBEB\xA675:", this->fonts.text.height);
+        SetDlgItemText (hWnd, 101, text);
+
         // set the new font(s) to appropriate children
 
-        SendDlgItemMessage (hWnd, 101, WM_SETFONT, (WPARAM) this->font.handle, 0);
-        SendDlgItemMessage (hWnd, IDOK, WM_SETFONT, (WPARAM) this->font.handle, 0);
+        SendDlgItemMessage (hWnd, 100, WM_SETFONT, (WPARAM) this->fonts.title.handle, 0);
+        SendDlgItemMessage (hWnd, 101, WM_SETFONT, (WPARAM) this->fonts.text.handle, 0);
+        SendDlgItemMessage (hWnd, IDOK, WM_SETFONT, (WPARAM) this->fonts.text.handle, 0);
 
         // refresh everthing else
 
@@ -390,13 +420,24 @@ private:
                     // make the label height fit the font tightly + the border
                     SIZE sizeLabel = {
                         client.right,
-                        this->font.height + 2 * this->metrics [SM_CYBORDER]
+                        this->fonts.text.height + 2 * this->metrics [SM_CYBORDER]
                     };
                     POINT posLabel = {
                         0,
                         posButton.y - sizeLabel.cy - (4 * dpi / 96) // uxguide says 4px spacing
                     };
                     DeferChildPos (hDwp, 101, posLabel, sizeLabel);
+
+                    // title
+                    SIZE sizeTitle = {
+                        client.right / 3,
+                        this->fonts.title.height
+                    };
+                    POINT posTitle = {
+                        client.right / 3,
+                        posLabel.y - sizeTitle.cy - (7 * dpi / 96)
+                    };
+                    DeferChildPos (hDwp, 100, posTitle, sizeTitle);
 
                     EndDeferWindowPos (hDwp);
                 }

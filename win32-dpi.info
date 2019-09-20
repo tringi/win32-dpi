@@ -9,7 +9,7 @@
 	major = 1
 	minor = 0
 	patch = 0
-	build = 62
+	build = 78
 
 [versioninfo]
 	filename	= %dir%\%internalname%.rc
