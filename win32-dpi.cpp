@@ -358,9 +358,9 @@ private:
 
         // set the new font(s) to appropriate children
 
-        SendDlgItemMessage (hWnd, 100, WM_SETFONT, (WPARAM) this->fonts.title.handle, 0);
-        SendDlgItemMessage (hWnd, 101, WM_SETFONT, (WPARAM) this->fonts.text.handle, 0);
-        SendDlgItemMessage (hWnd, IDOK, WM_SETFONT, (WPARAM) this->fonts.text.handle, 0);
+        SendDlgItemMessage (hWnd, 100, WM_SETFONT, (WPARAM) this->fonts.title.handle, 1);
+        SendDlgItemMessage (hWnd, 101, WM_SETFONT, (WPARAM) this->fonts.text.handle, 1);
+        SendDlgItemMessage (hWnd, IDOK, WM_SETFONT, (WPARAM) this->fonts.text.handle, 1);
 
         // refresh everthing else
 
