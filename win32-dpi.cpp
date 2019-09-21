@@ -291,6 +291,7 @@ private:
         CreateWindow (L"STATIC", L"", WS_VISIBLE | WS_CHILD | SS_LEFT, 0,0,0,0, hWnd, (HMENU) 100, cs->hInstance, NULL);
         CreateWindow (L"STATIC", L"", WS_VISIBLE | WS_CHILD | WS_BORDER | SS_CENTER, 0,0,0,0, hWnd, (HMENU) 101, cs->hInstance, NULL);
         CreateWindow (L"BUTTON", L"BUTTON", WS_VISIBLE | WS_CHILD | WS_TABSTOP, 0,0,0,0, hWnd, (HMENU) IDOK, cs->hInstance, NULL);
+        this->dpi = GetDPI (this->hWnd);
         this->OnVisualEnvironmentChange ();
         return 0;
     }
@@ -313,7 +314,6 @@ private:
         return 0;
     }
     LRESULT OnVisualEnvironmentChange () {
-        this->dpi = GetDPI (this->hWnd);
         auto dpiSystem = GetDPI (NULL);
         auto hTheme = OpenThemeData (hWnd, L"TEXTSTYLE");
 
