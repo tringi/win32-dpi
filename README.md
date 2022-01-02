@@ -1,6 +1,6 @@
 # Win32 DPI-aware window example
 
-Trivial example on how to write Win32 DPI-aware GUI application that scales properly on everything starting Windows XP and ending with latest Windows 10 (tested on insider build 10.0.18980.1).
+Trivial example on how to write Win32 DPI-aware GUI application that scales properly on everything starting Windows XP and ending with latest Windows 11 (tested on insider build 10.0.22523.1).
 
 ## In a nutshell
 
@@ -11,6 +11,11 @@ Trivial example on how to write Win32 DPI-aware GUI application that scales prop
 * It's error-prone to call GetSystemMetrics wherever needed and scale manually, precompute these
 * Mostly everything derives metrics from font size: recreate fonts on DPI change, remember height, rescale accordingly
 * Window and Taskbar icons sizes change too
+
+## Additional
+
+* The example also shows how to track "TextScaleFactor" for UWP apps, see Settings > Accessibility > Text size,
+  and apply it to Win32 window content scaling.
 
 ## Manifest
 
@@ -33,10 +38,6 @@ tool to generate manifest that will request everything known so far, and then de
 * [Improving the high-DPI experience in GDI based Desktop Apps](https://blogs.windows.com/windowsdeveloper/2017/05/19/improving-high-dpi-experience-gdi-based-desktop-apps/#VllxTW8vOXIB4HqW.97)
 * [High-DPI Scaling Improvements for Desktop Applications in the Windows 10 Creators Update (1703)](https://blogs.windows.com/windowsdeveloper/2017/04/04/high-dpi-scaling-improvements-desktop-applications-windows-10-creators-update/#Due3kFlj32WEmiwf.97)
 * [High DPI Scaling Improvements for Desktop Applications and “Mixed Mode” DPI Scaling in the Windows 10 Anniversary Update (1607)](https://blogs.windows.com/windowsdeveloper/2016/10/24/high-dpi-scaling-improvements-for-desktop-applications-and-mixed-mode-dpi-scaling-in-the-windows-10-anniversary-update/#2rElZ4ZhV2dvcUOp.97)
-
-## TODO
-
-* Extend icon to include all realistic sizes
 
 # ISC License
 

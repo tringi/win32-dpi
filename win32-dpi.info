@@ -7,9 +7,9 @@
 	internalname		= win32-dpi
 
 	major = 1
-	minor = 0
+	minor = 1
 	patch = 0
-	build = 87
+	build = 98
 
 [versioninfo]
 	filename	= %dir%\%internalname%.rc
@@ -53,4 +53,4 @@
 
 	dependentAssembly:1	= Microsoft.Windows.Common-Controls 6.0.0.0 6595b64144ccf1df
 
-	maxversiontested = 10.0.18980.1
+	maxversiontested = 10.0.22523.1

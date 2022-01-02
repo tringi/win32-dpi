@@ -59,6 +59,102 @@ UINT GetDPI (HWND hWnd) {
         return USER_DEFAULT_SCREEN_DPI;
 }
 
+// TextScale
+//  - singleton tracking the per-user "Settings > Accessibility > Text size" feature for UWP Apps
+//  - there is no documented Win32 API to get this value, so we read it from registry
+//  - we craft this notification facility because:
+//     - the OS doesn't always broadcast WM_SETTINGCHANGE message when the scale factor changes
+//     - the "Accessibility" key and "TextScaleFactor" value may not exist at first
+//  - there is no destructor, the object lives for the lifetime of the process, OS cleans up
+//
+class TextScale {
+    HKEY    hKey = NULL; // HKCU\SOFTWARE\Microsoft[\Accessibility]
+    bool    parent = false; // if true, we are waiting for Accessibilty subkey to be created first
+
+public:
+    DWORD   current = 100;
+    HANDLE  hEvent = NULL;
+
+public:
+    bool Initialize () {
+        if (IsWindows10OrGreater ()) { // TODO: which build?
+            this->hEvent = CreateEvent (NULL, FALSE, FALSE, NULL);
+            if (this->hEvent)
+                return this->ReOpenKeys ();
+        }
+        return false;
+    }
+
+    // OnEvent
+    //  - should be called whenever this->hEvent gets signalled
+    //  - returns 'true' if the scale factor might have changed, and application should redraw the GUI
+    //
+    bool OnEvent () {
+        if (this->parent) {
+            // "Accessibility" subkey might have been created, try to acces it again
+            if (this->ReOpenKeys ()) {
+                // if the subkey was created, we now have new scale factor, so report that as change
+                return this->parent == false;
+            } else
+                return false;
+
+        } else {
+            bool changed = false;
+            // some value inside "Accessibility" subkey has changed, see if it was "TextScaleFactor"
+            auto updated = this->GetCurrentTextScaleFactor ();
+            if (this->current != updated) {
+                this->current = updated;
+                changed = true;
+            }
+            // re-register for next event
+            RegNotifyChangeKeyValue (this->hKey, FALSE, REG_NOTIFY_CHANGE_LAST_SET, this->hEvent, TRUE);
+            return changed;
+        }
+    }
+
+    // Apply 
+    //  - adjusts font height according to current text scale factor
+    //  - NOTE: if all fonts are to be scaled, this can be called from Window::Font::update
+    //
+    void Apply (LOGFONT & lf) const {
+        lf.lfHeight = MulDiv (lf.lfHeight, this->current, 100);
+    }
+
+private:
+    bool ReOpenKeys () {
+        if (this->hKey) {
+            RegCloseKey (this->hKey);
+            this->hKey = NULL;
+        }
+        if (RegOpenKeyEx (HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Accessibility", 0, KEY_NOTIFY | KEY_QUERY_VALUE, &this->hKey) == ERROR_SUCCESS) {
+            if (RegNotifyChangeKeyValue (this->hKey, FALSE, REG_NOTIFY_CHANGE_LAST_SET, this->hEvent, TRUE) == ERROR_SUCCESS) {
+                this->parent = false;
+                this->current = this->GetCurrentTextScaleFactor ();
+                return true;
+            }
+        } else {
+            if (RegOpenKeyEx (HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft", 0, KEY_NOTIFY, &this->hKey) == ERROR_SUCCESS) {
+                if (RegNotifyChangeKeyValue (this->hKey, FALSE, REG_NOTIFY_CHANGE_NAME, this->hEvent, TRUE) == ERROR_SUCCESS) {
+                    this->parent = true;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    DWORD GetCurrentTextScaleFactor () const {
+        DWORD scale;
+        DWORD cb = sizeof scale;
+
+        if ((this->parent == false) && (this->hKey != NULL) && (RegQueryValueEx (this->hKey, L"TextScaleFactor", NULL, NULL, (LPBYTE) &scale, &cb) == ERROR_SUCCESS)) {
+            return scale;
+        } else
+            return 100;
+    }
+
+} TextScale;
+
 // Most (hopefully) reliable way to detect if v2 scaling is imposed on the window
 //  - uxtheme Get... APIs return per-window scaled values only if this yields true, otherwise do: dpi * value / dpiSystem
 //  - NOTE: GetThemeFont is affected, GetThemeSysFont is not (and still needs to be adjusted)
@@ -290,6 +386,7 @@ private:
     LRESULT OnCreate (const CREATESTRUCT * cs) {
         CreateWindow (L"STATIC", L"", WS_VISIBLE | WS_CHILD | SS_LEFT, 0,0,0,0, hWnd, (HMENU) 100, cs->hInstance, NULL);
         CreateWindow (L"STATIC", L"", WS_VISIBLE | WS_CHILD | WS_BORDER | SS_CENTER, 0,0,0,0, hWnd, (HMENU) 101, cs->hInstance, NULL);
+        CreateWindow (L"STATIC", L"", WS_VISIBLE | WS_CHILD | SS_CENTER, 0,0,0,0, hWnd, (HMENU) 102, cs->hInstance, NULL);
         CreateWindow (L"BUTTON", L"BUTTON", WS_VISIBLE | WS_CHILD | WS_TABSTOP, 0,0,0,0, hWnd, (HMENU) IDOK, cs->hInstance, NULL);
         this->dpi = GetDPI (this->hWnd);
         this->OnVisualEnvironmentChange ();
@@ -324,10 +421,12 @@ private:
         LOGFONT lf;
         if (GetThemeSysFont (hTheme, TMT_MSGBOXFONT, &lf) == S_OK) {
             lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+            TextScale.Apply (lf);
             this->fonts.text.update (lf);
         } else {
             if (GetObject (GetStockObject (DEFAULT_GUI_FONT), sizeof lf, &lf)) {
                 lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+                TextScale.Apply (lf);
                 this->fonts.text.update (lf);
             }
         }
@@ -335,11 +434,13 @@ private:
             if (!AreDpiApisScaled (this->hWnd)) {
                 lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
             }
+            TextScale.Apply (lf);
             this->fonts.title.update (lf);
         } else {
             // themes off or unavailable, reuse above one and make it bold
             lf.lfWeight = FW_BOLD;
             lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+            TextScale.Apply (lf);
             this->fonts.title.update (lf);
         }
 
@@ -350,16 +451,20 @@ private:
         // display text size
 
         wchar_t text [64];
-        swprintf (text, L"%ld px TITLE:", this->fonts.title.height);
+        swprintf (text, 64, L"%ld px TITLE", this->fonts.title.height);
         SetDlgItemText (hWnd, 100, text);
 
-        swprintf (text, L"%ld px text characters test: \x158\xB3 \x338 \x2211 \xBEB\xA675:", this->fonts.text.height);
+        swprintf (text, 64, L"%ld px text characters test: \x158\xB3 \x338 \x2211 \xBEB\xA675:", this->fonts.text.height);
         SetDlgItemText (hWnd, 101, text);
+
+        swprintf (text, 64, L"Text scale factor: %lu", TextScale.current);
+        SetDlgItemText (hWnd, 102, text);
 
         // set the new font(s) to appropriate children
 
         SendDlgItemMessage (hWnd, 100, WM_SETFONT, (WPARAM) this->fonts.title.handle, 1);
         SendDlgItemMessage (hWnd, 101, WM_SETFONT, (WPARAM) this->fonts.text.handle, 1);
+        SendDlgItemMessage (hWnd, 102, WM_SETFONT, (WPARAM) this->fonts.text.handle, 1);
         SendDlgItemMessage (hWnd, IDOK, WM_SETFONT, (WPARAM) this->fonts.text.handle, 1);
 
         // refresh everthing else
@@ -407,8 +512,8 @@ private:
 
                     // use a little larger than recommended size from uxguide: https://docs.microsoft.com/en-us/windows/win32/uxguide/ctrl-command-buttons
                     SIZE sizeButton = {
-                        85 * dpi / 96,
-                        25 * dpi / 96
+                        (85 * dpi * TextScale.current) / (96 * 100),
+                        (25 * dpi * TextScale.current) / (96 * 100)
                     };
                     // center it
                     POINT posButton = {
@@ -428,6 +533,16 @@ private:
                         posButton.y - sizeLabel.cy - (4 * dpi / 96) // uxguide says 4px spacing
                     };
                     DeferChildPos (hDwp, 101, posLabel, sizeLabel);
+
+                    SIZE sizeLabel2 = {
+                        client.right,
+                        this->fonts.text.height + 2 * this->metrics [SM_CYBORDER]
+                    };
+                    POINT posLabel2 = {
+                        0,
+                        posButton.y + sizeButton.cy + (4 * dpi / 96)
+                    };
+                    DeferChildPos (hDwp, 102, posLabel2, sizeLabel2);
 
                     // title
                     SIZE sizeTitle = {
@@ -504,10 +619,53 @@ int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR
             MSG message;
             message.wParam = 0;
 
-            while (GetMessage (&message, NULL, 0u, 0u)) {
-                if (!IsDialogMessage (GetAncestor (message.hwnd, GA_ROOT), &message)) {
-                    TranslateMessage (&message);
-                    DispatchMessage (&message);
+            if (TextScale.Initialize ()) {
+
+                // message loop when you also want to handle Win32 events
+
+                DWORD mwmoFlags = 0x00FFu;
+                if (IsWindowsXPOrGreater ()) {
+                    mwmoFlags |= QS_RAWINPUT;
+                }
+                if (IsWindows8OrGreater ()) {
+                    mwmoFlags |= QS_TOUCH | QS_POINTER;
+                }
+
+                do
+                switch (MsgWaitForMultipleObjectsEx (1u, &TextScale.hEvent, INFINITE, mwmoFlags, 0)) {
+                    case WAIT_OBJECT_0 + 0:
+                        if (TextScale.OnEvent ()) {
+                            SendMessage (hWnd, WM_SETTINGCHANGE, 0, 0);
+                        }
+                        break;
+
+                    case WAIT_OBJECT_0 + 1:
+                        while (PeekMessage (&message, NULL, 0u, 0u, PM_REMOVE)) {
+                            if (message.message == WM_QUIT) {
+                                break;
+                            }
+                            if (!IsDialogMessage (GetAncestor (message.hwnd, GA_ROOT), &message)) {
+                                TranslateMessage (&message);
+                                DispatchMessage (&message);
+                            }
+                        }
+                        break;
+
+                    default:
+                    case WAIT_FAILED:
+                        return (int) GetLastError ();
+
+                } while (message.message != WM_QUIT);
+
+            } else {
+                
+                // standard Win32 message loop
+
+                while (GetMessage (&message, NULL, 0u, 0u)) {
+                    if (!IsDialogMessage (GetAncestor (message.hwnd, GA_ROOT), &message)) {
+                        TranslateMessage (&message);
+                        DispatchMessage (&message);
+                    }
                 }
             }
             return (int) message.wParam;
