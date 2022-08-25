@@ -196,9 +196,39 @@ struct Window {
 private:
     long dpi = 96;
     int  metrics [SM_CMETRICS] = { 0 };
-    HICON icons [IconSizesCount] = { NULL };
     HCURSOR cursor = NULL;
-    
+
+    struct {
+        HICON standard [IconSizesCount] = { NULL };
+
+        // cache for icons of different DPI
+
+        struct PerDpiIcon {
+            WPARAM type = 0;
+            LPARAM dpi = 0;
+            HICON  icon = NULL;
+        };
+        struct {
+            PerDpiIcon * data = nullptr;
+            std::size_t n = 0;
+
+            struct {
+                bool         found;
+                PerDpiIcon * icon;
+
+            } find (WPARAM type, LPARAM dpi) {
+                for (std::size_t i = 0; i != n; ++i) {
+                    if ((this->data [i].type == type) && (this->data [i].dpi == dpi))
+                        return { true, &this->data [i] };
+
+                    if (this->data [i].dpi == 0)
+                        return { false, &this->data [i] };
+                }
+                return { false, nullptr };
+            }
+        } dpi;
+    } icons;
+
     explicit Window (HWND hWnd)
         : hWnd (hWnd)
         , dpi (GetDPI (hWnd)) {};
@@ -207,7 +237,7 @@ private:
     //  - we want crisp icons wherever possible
     //  - including the larger sizes is just flexing
     //
-    SIZE GetIconMetrics (IconSize size, UINT dpiSystem) {
+    SIZE GetIconMetrics (IconSize size, UINT dpiSystem = 0) {
         switch (size) {
             case SmallIconSize:
                 return { metrics [SM_CXSMICON], metrics [SM_CYSMICON] };
@@ -222,6 +252,9 @@ private:
 
             case ShellIconSize:
             case JumboIconSize:
+                if (dpiSystem == 0) {
+                    dpiSystem = GetDPI (NULL);
+                }
                 if (IsWindowsVistaOrGreater () || (size == ShellIconSize)) { // XP doesn't have Jumbo
                     if (HMODULE hShell32 = GetModuleHandle (L"SHELL32")) {
                         HRESULT (WINAPI * ptrSHGetImageList) (int, const GUID &, void **) = NULL;
@@ -251,6 +284,26 @@ private:
                     case ShellIconSize: return { long (48 * dpi / dpiSystem), long (48 * dpi / dpiSystem) };
                     case JumboIconSize: return { long (256 * dpi / 96), long (256 * dpi / 96) };
                 }
+        }
+    }
+
+    // MapIconSize
+    //  - selecting proper IconSize from WM_GETICON/WM_SETICON wParam
+    //  - using proper size for Windows 10 taskbar
+    //
+    IconSize MapIconSize (WPARAM type) {
+        switch (type) {
+            case ICON_BIG:
+                if (IsWindows10OrGreater ()) {
+                    return StartIconSize;
+                } else {
+                    return LargeIconSize;
+                }
+            case ICON_SMALL:
+            case ICON_SMALL2:
+                return SmallIconSize;
+            default:
+                return LargeIconSize;
         }
     }
 
@@ -347,6 +400,33 @@ private:
                 }
                 break;
 
+            case WM_GETICON:
+                if (lParam && (lParam != this->dpi)) {
+
+                    // OS (taskbars on different displays) or other app asked for icon in different DPI
+                    if (auto [found, data] = this->icons.dpi.find (wParam, lParam); found) {
+                        return (LRESULT) data->icon;
+
+                    } else {
+                        auto ndpi = (long) lParam;
+                        auto size = GetIconMetrics (this->MapIconSize (wParam));
+                        auto icon = LoadBestIcon (reinterpret_cast <HINSTANCE> (&__ImageBase), MAKEINTRESOURCE (1),
+                                                  { ndpi * size.cx / 96, ndpi * size.cy / 96 });
+                        if (data) {
+                            data->type = wParam;
+                            data->dpi = ndpi;
+                            data->icon = icon;
+                        }
+                        return (LRESULT) icon;
+                    }
+                } else {
+                    switch (wParam) {
+                        case ICON_SMALL2:
+                            return (LRESULT) this->icons.standard [this->MapIconSize (wParam)];
+                    }
+                }
+                break;
+
             case WM_DPICHANGED:
                 return this->OnDpiChange (wParam, reinterpret_cast <const RECT *> (lParam));
             case WM_WINDOWPOSCHANGED:
@@ -393,7 +473,7 @@ private:
         return 0;
     }
     LRESULT OnDestroy () {
-        for (auto icon : this->icons) {
+        for (auto icon : this->icons.standard) {
             DestroyIcon (icon);
         }
         PostQuitMessage (0);
@@ -477,10 +557,19 @@ private:
         for (auto i = 0u; i != IconSizesCount; ++i) {
             if (auto icon = LoadBestIcon (reinterpret_cast <HINSTANCE> (&__ImageBase), MAKEINTRESOURCE (1),
                                           GetIconMetrics ((IconSize) i, dpiSystem))) {
-                if (this->icons [i]) {
-                    DestroyIcon (this->icons [i]);
+                if (this->icons.standard [i]) {
+                    DestroyIcon (this->icons.standard [i]);
                 }
-                this->icons [i] = icon;
+                this->icons.standard [i] = icon;
+            }
+        }
+        for (auto i = 0u; i != this->icons.dpi.n; ++i) {
+            if (this->icons.dpi.data [i].icon) {
+                DestroyIcon (this->icons.dpi.data [i].icon);
+
+                this->icons.dpi.data [i].type = 0;
+                this->icons.dpi.data [i].dpi = 0;
+                this->icons.dpi.data [i].icon = NULL;
             }
         }
 
@@ -490,8 +579,8 @@ private:
         //    and surprisingly pinning it explicitly with 24x24 icon won't work either, such
         //    icon will be scaled up to 32x32 and then down to 24x24 resulting in blurry mess
 
-        SendMessage (hWnd, WM_SETICON, ICON_SMALL, (LPARAM) this->icons [SmallIconSize]);
-        SendMessage (hWnd, WM_SETICON, ICON_BIG, (LPARAM) this->icons [IsWindows10OrGreater () ? StartIconSize : LargeIconSize]);
+        SendMessage (hWnd, WM_SETICON, ICON_SMALL, (LPARAM) this->icons.standard [MapIconSize (ICON_SMALL)]);
+        SendMessage (hWnd, WM_SETICON, ICON_BIG, (LPARAM) this->icons.standard [MapIconSize (ICON_BIG)]);
 
         return 0;
     }
@@ -596,7 +685,7 @@ private:
 
 int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int nCmdShow) {
     InitCommonControls ();
-
+    
     if (HMODULE hUser32 = GetModuleHandle (L"USER32")) {
         Symbol (hUser32, ptrEnableNonClientDpiScaling, "EnableNonClientDpiScaling");
         Symbol (hUser32, pfnGetDpiForSystem, "GetDpiForSystem");
