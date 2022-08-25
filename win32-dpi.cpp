@@ -294,6 +294,13 @@ private:
     IconSize MapIconSize (WPARAM type) {
         switch (type) {
             case ICON_BIG:
+
+                // Windows 10 Taskbar icons are not 32x32, but 24x24 (on 96 DPI)
+                //  - note that using 24x24 for ICON_BIG works only if the application isn't pinned,
+                //    then the Shell will load 32x32 and scale it down despite 24x24 being available;
+                //    and surprisingly pinning it explicitly with 24x24 icon won't work either, such
+                //    icon will be scaled up to 32x32 and then down to 24x24 resulting in blurry mess
+
                 if (IsWindows10OrGreater ()) {
                     return StartIconSize;
                 } else {
@@ -563,6 +570,9 @@ private:
                 this->icons.standard [i] = icon;
             }
         }
+
+        // drop DPI-specific icon cache
+
         for (auto i = 0u; i != this->icons.dpi.n; ++i) {
             if (this->icons.dpi.data [i].icon) {
                 DestroyIcon (this->icons.dpi.data [i].icon);
@@ -573,11 +583,7 @@ private:
             }
         }
 
-        // Windows 10 Taskbar icons are not 32x32, but 24x24 (on 96 DPI)
-        //  - note that using 24x24 for ICON_BIG works only if the application isn't pinned,
-        //    then the Shell will load 32x32 and scale it down despite 24x24 being available;
-        //    and surprisingly pinning it explicitly with 24x24 icon won't work either, such
-        //    icon will be scaled up to 32x32 and then down to 24x24 resulting in blurry mess
+        // set primary pair of icons for the window
 
         SendMessage (hWnd, WM_SETICON, ICON_SMALL, (LPARAM) this->icons.standard [MapIconSize (ICON_SMALL)]);
         SendMessage (hWnd, WM_SETICON, ICON_BIG, (LPARAM) this->icons.standard [MapIconSize (ICON_BIG)]);
