@@ -201,32 +201,28 @@ private:
     struct {
         HICON standard [IconSizesCount] = { NULL };
 
-        // cache for icons of different DPI
+        // small cache for icons of different DPI
 
         struct PerDpiIcon {
             WPARAM type = 0;
             LPARAM dpi = 0;
             HICON  icon = NULL;
-        };
+        } dpi_cache [16];
+
         struct {
-            PerDpiIcon * data = nullptr;
-            std::size_t n = 0;
+            bool         found;
+            PerDpiIcon * icon;
 
-            struct {
-                bool         found;
-                PerDpiIcon * icon;
+        } find_in_dpi_cache (WPARAM type, LPARAM dpi) {
+            for (auto & icon : this->dpi_cache) {
+                if ((icon.type == type) && (icon.dpi == dpi))
+                    return { true, &icon };
 
-            } find (WPARAM type, LPARAM dpi) {
-                for (std::size_t i = 0; i != n; ++i) {
-                    if ((this->data [i].type == type) && (this->data [i].dpi == dpi))
-                        return { true, &this->data [i] };
-
-                    if (this->data [i].dpi == 0)
-                        return { false, &this->data [i] };
-                }
-                return { false, nullptr };
+                if (icon.dpi == 0)
+                    return { false, &icon };
             }
-        } dpi;
+            return { false, nullptr };
+        }
     } icons;
 
     explicit Window (HWND hWnd)
@@ -411,7 +407,7 @@ private:
                 if (lParam && (lParam != this->dpi)) {
 
                     // OS (taskbars on different displays) or other app asked for icon in different DPI
-                    if (auto [found, data] = this->icons.dpi.find (wParam, lParam); found) {
+                    if (auto [found, data] = this->icons.find_in_dpi_cache (wParam, lParam); found) {
                         return (LRESULT) data->icon;
 
                     } else {
@@ -573,13 +569,13 @@ private:
 
         // drop DPI-specific icon cache
 
-        for (auto i = 0u; i != this->icons.dpi.n; ++i) {
-            if (this->icons.dpi.data [i].icon) {
-                DestroyIcon (this->icons.dpi.data [i].icon);
+        for (auto & item : this->icons.dpi_cache) {
+            if (item.icon) {
+                DestroyIcon (item.icon);
 
-                this->icons.dpi.data [i].type = 0;
-                this->icons.dpi.data [i].dpi = 0;
-                this->icons.dpi.data [i].icon = NULL;
+                item.type = 0;
+                item.dpi = 0;
+                item.icon = NULL;
             }
         }
 
