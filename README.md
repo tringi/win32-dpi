@@ -9,8 +9,10 @@ Trivial example on how to write Win32 DPI-aware GUI application that scales prop
 * All metrics normally (pre-v2) reported to the application are in System DPI
 * Some APIs (GetThemeFont) scale the reported values when in PerMonitorV2 awareness mode
 * It's error-prone to call GetSystemMetrics wherever needed and scale manually, precompute these
-* Mostly everything derives metrics from font size: recreate fonts on DPI change, remember height, rescale accordingly
+* Mostly everything derives metrics from font size
+   * recreate fonts on DPI change, remember height, rescale accordingly
 * Window and Taskbar icons sizes change too
+   * the OS may ask for different DPI icon (e.g. for Taskbar on monitor with different DPI)
 
 ## Additional
 
