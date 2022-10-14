@@ -705,60 +705,29 @@ int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR
         if (auto hWnd = CreateWindow (atom, L"Win32 DPI-aware window example",
                                       WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                       D, D, D, D, HWND_DESKTOP, NULL, hInstance, NULL)) {
+
+            if (TextScale.Initialize ()) {
+                HANDLE hThreadPoolWait = NULL;
+                RegisterWaitForSingleObject (&hThreadPoolWait, TextScale.hEvent,
+                                             [] (PVOID hWnd, BOOLEAN) {
+                                                 if (TextScale.OnEvent ()) {
+                                                     SendMessage ((HWND) hWnd, WM_SETTINGCHANGE, 0, 0);
+                                                 }
+                                             }, hWnd, INFINITE, 0);
+            }
+                
             ShowWindow (hWnd, nCmdShow);
 
             MSG message;
             message.wParam = 0;
 
-            if (TextScale.Initialize ()) {
-
-                // message loop when you also want to handle Win32 events
-
-                DWORD mwmoFlags = 0x00FFu;
-                if (IsWindowsXPOrGreater ()) {
-                    mwmoFlags |= QS_RAWINPUT;
-                }
-                if (IsWindows8OrGreater ()) {
-                    mwmoFlags |= QS_TOUCH | QS_POINTER;
-                }
-
-                do
-                switch (MsgWaitForMultipleObjectsEx (1u, &TextScale.hEvent, INFINITE, mwmoFlags, 0)) {
-                    case WAIT_OBJECT_0 + 0:
-                        if (TextScale.OnEvent ()) {
-                            SendMessage (hWnd, WM_SETTINGCHANGE, 0, 0);
-                        }
-                        break;
-
-                    case WAIT_OBJECT_0 + 1:
-                        while (PeekMessage (&message, NULL, 0u, 0u, PM_REMOVE)) {
-                            if (message.message == WM_QUIT) {
-                                break;
-                            }
-                            if (!IsDialogMessage (GetAncestor (message.hwnd, GA_ROOT), &message)) {
-                                TranslateMessage (&message);
-                                DispatchMessage (&message);
-                            }
-                        }
-                        break;
-
-                    default:
-                    case WAIT_FAILED:
-                        return (int) GetLastError ();
-
-                } while (message.message != WM_QUIT);
-
-            } else {
-                
-                // standard Win32 message loop
-
-                while (GetMessage (&message, NULL, 0u, 0u)) {
-                    if (!IsDialogMessage (GetAncestor (message.hwnd, GA_ROOT), &message)) {
-                        TranslateMessage (&message);
-                        DispatchMessage (&message);
-                    }
+            while (GetMessage (&message, NULL, 0u, 0u)) {
+                if (!IsDialogMessage (GetAncestor (message.hwnd, GA_ROOT), &message)) {
+                    TranslateMessage (&message);
+                    DispatchMessage (&message);
                 }
             }
+            
             return (int) message.wParam;
         }
     }
