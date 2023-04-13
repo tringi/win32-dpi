@@ -263,12 +263,12 @@ private:
                         if (ptrSHGetImageList) {
                             HIMAGELIST list;
                             if (ptrSHGetImageList ((size == JumboIconSize) ? SHIL_JUMBO : SHIL_EXTRALARGE,
-                                                   IID_IImageList, (void **) & list) == S_OK) {
+                                                   IID_IImageList, (void **) &list) == S_OK) {
                                 int cx, cy;
                                 if (ImageList_GetIconSize (list, &cx, &cy)) {
                                     switch (size) {
-                                        case ShellIconSize: return { long (cx * dpi / dpiSystem), long (cy * dpi / dpiSystem) };
-                                        case JumboIconSize: return { long (cx * dpi / 96), long (cy * dpi / 96) };
+                                        case ShellIconSize: return { long (cx * this->dpi / dpiSystem), long (cy * this->dpi / dpiSystem) };
+                                        case JumboIconSize: return { long (cx * this->dpi / 96), long (cy * this->dpi / 96) };
                                     }
                                 }
                             }
@@ -277,8 +277,8 @@ private:
                 }
                 switch (size) {
                     default:
-                    case ShellIconSize: return { long (48 * dpi / dpiSystem), long (48 * dpi / dpiSystem) };
-                    case JumboIconSize: return { long (256 * dpi / 96), long (256 * dpi / 96) };
+                    case ShellIconSize: return { long (48 * this->dpi / dpiSystem), long (48 * this->dpi / dpiSystem) };
+                    case JumboIconSize: return { long (256 * this->dpi / 96), long (256 * this->dpi / 96) };
                 }
         }
     }
@@ -503,26 +503,26 @@ private:
 
         LOGFONT lf;
         if (GetThemeSysFont (hTheme, TMT_MSGBOXFONT, &lf) == S_OK) {
-            lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+            lf.lfHeight = MulDiv (lf.lfHeight, this->dpi, dpiSystem);
             TextScale.Apply (lf);
             this->fonts.text.update (lf);
         } else {
             if (GetObject (GetStockObject (DEFAULT_GUI_FONT), sizeof lf, &lf)) {
-                lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+                lf.lfHeight = MulDiv (lf.lfHeight, this->dpi, dpiSystem);
                 TextScale.Apply (lf);
                 this->fonts.text.update (lf);
             }
         }
         if (GetThemeFont (hTheme, NULL, TEXT_MAININSTRUCTION, 0, TMT_FONT, &lf) == S_OK) {
             if (!AreDpiApisScaled (this->hWnd)) {
-                lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+                lf.lfHeight = MulDiv (lf.lfHeight, this->dpi, dpiSystem);
             }
             TextScale.Apply (lf);
             this->fonts.title.update (lf);
         } else {
             // themes off or unavailable, reuse above one and make it bold
             lf.lfWeight = FW_BOLD;
-            lf.lfHeight = MulDiv (lf.lfHeight, dpi, dpiSystem);
+            lf.lfHeight = MulDiv (lf.lfHeight, this->dpi, dpiSystem);
             TextScale.Apply (lf);
             this->fonts.title.update (lf);
         }
@@ -558,6 +558,7 @@ private:
         // DPI changes also size of window icons
 
         for (auto i = 0u; i != IconSizesCount; ++i) {
+            auto m = GetIconMetrics ((IconSize) i, dpiSystem);
             if (auto icon = LoadBestIcon (reinterpret_cast <HINSTANCE> (&__ImageBase), MAKEINTRESOURCE (1),
                                           GetIconMetrics ((IconSize) i, dpiSystem))) {
                 if (this->icons.standard [i]) {
@@ -603,8 +604,8 @@ private:
 
                     // use a little larger than recommended size from uxguide: https://docs.microsoft.com/en-us/windows/win32/uxguide/ctrl-command-buttons
                     SIZE sizeButton = {
-                        (85 * dpi * TextScale.current) / (96 * 100),
-                        (25 * dpi * TextScale.current) / (96 * 100)
+                        (85 * this->dpi * TextScale.current) / (96 * 100),
+                        (25 * this->dpi * TextScale.current) / (96 * 100)
                     };
                     // center it
                     POINT posButton = {
@@ -621,7 +622,7 @@ private:
                     };
                     POINT posLabel = {
                         0,
-                        posButton.y - sizeLabel.cy - (4 * dpi / 96) // uxguide says 4px spacing
+                        posButton.y - sizeLabel.cy - (4 * this->dpi / 96) // uxguide says 4px spacing
                     };
                     DeferChildPos (hDwp, 101, posLabel, sizeLabel);
 
@@ -631,7 +632,7 @@ private:
                     };
                     POINT posLabel2 = {
                         0,
-                        posButton.y + sizeButton.cy + (4 * dpi / 96)
+                        posButton.y + sizeButton.cy + (4 * this->dpi / 96)
                     };
                     DeferChildPos (hDwp, 102, posLabel2, sizeLabel2);
 
@@ -642,7 +643,7 @@ private:
                     };
                     POINT posTitle = {
                         client.right / 3,
-                        posLabel.y - sizeTitle.cy - (7 * dpi / 96)
+                        posLabel.y - sizeTitle.cy - (7 * this->dpi / 96)
                     };
                     DeferChildPos (hDwp, 100, posTitle, sizeTitle);
 
