@@ -367,6 +367,21 @@ private:
         Font title;
     } fonts;
 
+    static inline UINT_PTR idGlobalRefreshTimer;
+    static constexpr USHORT WM_GlobalRefresh = WM_APP + 0x1234; // choose message that doesn't clash with others in application 
+
+    static void CALLBACK GuiChangesCoalescingTimer (HWND hWnd, UINT, UINT_PTR id, DWORD) {
+        idGlobalRefreshTimer = 0;
+        KillTimer (hWnd, id);
+
+        // we can refresh DPI-independent and window-independent resources only once here
+
+        EnumThreadWindows (GetCurrentThreadId (),
+                           [] (HWND hWnd, LPARAM)->BOOL {
+                               return PostMessage (hWnd, WM_GlobalRefresh, 0, 0);
+                           }, 0);
+    }
+
 public:
     static LPCTSTR Initialize (HINSTANCE hInstance) {
         WNDCLASSEX wndclass = {
@@ -438,6 +453,9 @@ private:
             case WM_THEMECHANGED:
             case WM_SETTINGCHANGE:
             case WM_DWMCOMPOSITIONCHANGED:
+                return this->OnPresentationChangeNotification ();
+
+            case WM_GlobalRefresh:
                 this->OnVisualEnvironmentChange ();
                 InvalidateRect (hWnd, NULL, TRUE);
                 break;
@@ -491,6 +509,10 @@ private:
 
         this->OnVisualEnvironmentChange ();
         SetWindowPos (hWnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top, 0);
+        return 0;
+    }
+    LRESULT OnPresentationChangeNotification () {
+        idGlobalRefreshTimer = SetTimer (NULL, idGlobalRefreshTimer, 500, GuiChangesCoalescingTimer);
         return 0;
     }
     LRESULT OnVisualEnvironmentChange () {

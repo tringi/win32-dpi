@@ -18,6 +18,8 @@ Trivial example on how to write Win32 DPI-aware GUI application that scales prop
 
 * The example also shows how to track "TextScaleFactor" for UWP apps, see Settings > Accessibility > Text size,
   and apply it to Win32 window content scaling.
+* Multiple WM_SETTINGCHANGE and other GUI change notifications can come in quick succession, so it is possible to alleviate
+  excess refresh and flickering by coalescing those, to improve user experience.
 
 ## Manifest
 
