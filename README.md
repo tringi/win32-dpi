@@ -13,6 +13,11 @@ Trivial example on how to write Win32 DPI-aware GUI application that scales prop
    * recreate fonts on DPI change, remember height, rescale accordingly
 * Window and Taskbar icons sizes change too
    * the OS may ask for different DPI icon (e.g. for Taskbar on monitor with different DPI)
+* Since Windows 10 there is mismatch between reality and documented Taskbar icon size
+   * Taskbar used to use [ICON_BIG](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-geticon)/[SM_CXICON](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getsystemmetrics)-sized icon (32×32)
+     but starting with Windows 10, it's resized down to 24×24 (so called *Start* size on XP)
+   * there is no API to query, so testing OS version, and updating code as Microsoft makes changes, remains
+   * Alt+Tab in Windows 11 now does the same, takes *BIG* icon, and scales it down to size of a *SMALL* one (16×16)
 
 ## Additional
 
