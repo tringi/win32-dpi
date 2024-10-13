@@ -19,6 +19,7 @@ int (WINAPI * ptrGetSystemMetricsForDpi) (int, UINT) = NULL;
 BOOL (WINAPI * ptrEnableNonClientDpiScaling) (HWND) = NULL;
 UINT (WINAPI * pfnGetDpiForSystem) () = NULL;
 UINT (WINAPI * pfnGetDpiForWindow) (HWND) = NULL;
+
 BOOL (WINAPI * ptrAreDpiAwarenessContextsEqual) (DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT) = NULL;
 DPI_AWARENESS_CONTEXT (WINAPI * ptrGetWindowDpiAwarenessContext) (HWND) = NULL;
 HRESULT (WINAPI * ptrLoadIconWithScaleDown) (HINSTANCE, PCWSTR, int, int, HICON *) = NULL;
@@ -580,7 +581,6 @@ private:
         // DPI changes also size of window icons
 
         for (auto i = 0u; i != IconSizesCount; ++i) {
-            auto m = GetIconMetrics ((IconSize) i, dpiSystem);
             if (auto icon = LoadBestIcon (reinterpret_cast <HINSTANCE> (&__ImageBase), MAKEINTRESOURCE (1),
                                           GetIconMetrics ((IconSize) i, dpiSystem))) {
                 if (this->icons.standard [i]) {
